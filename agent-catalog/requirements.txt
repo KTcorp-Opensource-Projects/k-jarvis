@@ -1,0 +1,21 @@
+# Agent Catalog Service - Requirements
+# Version: 1.3.0 (PostgreSQL + Redis Cache)
+
+# Web Framework
+fastapi==0.109.0
+uvicorn==0.27.0.post1
+
+# Database
+asyncpg==0.29.0
+
+# Cache
+redis==5.0.1
+
+# HTTP Client
+httpx==0.26.0
+
+# Data Validation
+pydantic==2.5.3
+
+# Logging
+loguru==0.7.2

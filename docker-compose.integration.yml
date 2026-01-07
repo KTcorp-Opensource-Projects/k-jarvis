@@ -1,0 +1,114 @@
+# =====================================================
+# K-Jarvis Orchestrator Team - Docker Compose (통합 환경)
+# 
+# 사용: docker-compose -f docker-compose.integration.yml up -d
+# 
+# 전제조건:
+#   1. docker network create kjarvis-network
+#   2. MCPHub의 PostgreSQL/Redis가 먼저 실행 중이어야 함
+# =====================================================
+
+version: '3.8'
+
+services:
+  # === K-Auth (OAuth 2.0 Server) ===
+  kauth:
+    build:
+      context: ../k-auth/backend
+      dockerfile: Dockerfile
+    container_name: kjarvis-kauth
+    environment:
+      # DB: 공용 PostgreSQL 사용 (MCPHub postgres)
+      - DATABASE_URL=postgresql+asyncpg://mcphub:mcphub123@mcphub-postgres-local:5432/k_auth
+      # Redis: 공용 Redis 사용 (DB 1) - MCPHub Redis가 없으면 비활성화
+      - REDIS_URL=redis://kjarvis-redis:6379/1
+      - JWT_SECRET_KEY=k-auth-docker-secret-key-2025
+      - ADMIN_PASSWORD=admin123!
+      - ADMIN_EMAIL=admin@k-jarvis.com
+      - ADMIN_USERNAME=admin
+      - ALLOWED_ORIGINS=http://localhost:4000,http://localhost:4001,http://localhost:3000,http://localhost:5173
+    ports:
+      - "4002:4002"
+    networks:
+      - kjarvis-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # === Orchestrator Backend ===
+  orchestrator-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kjarvis-orchestrator-backend
+    environment:
+      # DB: 공용 PostgreSQL 사용 (MCPHub postgres)
+      - DB_HOST=mcphub-postgres-local
+      - DB_PORT=5432
+      - DB_NAME=orchestrator
+      - DB_USER=mcphub
+      - DB_PASSWORD=mcphub123
+      # Redis: 공용 Redis 사용 (DB 0)
+      - REDIS_URL=redis://kjarvis-redis:6379/0
+      # Azure OpenAI 설정 (Agent Team 공유)
+      - LLM_PROVIDER=azure
+      - AZURE_OPENAI_ENDPOINT=https://oai-az01-sbox-poc-131.openai.azure.com/
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_DEPLOYMENT=gpt-4.1
+      - AZURE_OPENAI_API_VERSION=2024-12-01-preview
+      # K-Auth: Docker 네트워크 내부 호스트명 (Backend-to-Backend)
+      - KAUTH_URL=http://kjarvis-kauth:4002
+      # K-Auth: 브라우저 리다이렉트용 (외부 접근)
+      - KAUTH_PUBLIC_URL=http://localhost:4002
+      # K-Auth DB에 등록된 OAuth Client 정보 사용
+      - KAUTH_CLIENT_ID=${KAUTH_CLIENT_ID:-kauth_B3-eUn5uQAvBPzxzNsCxaA}
+      # K-Auth Client Secret (등록 시 생성됨)
+      - KAUTH_CLIENT_SECRET=${KAUTH_CLIENT_SECRET:-W7vDjEeR1e3ZeeQkC8hRsLFQwtZgCfNm_Z0g74ODYN0}
+      # MCPHub: Docker 네트워크 내부 호스트명
+      - MCPHUB_URL=http://kjarvis-mcphub-backend:3000
+      - CORS_ORIGINS=http://localhost:4000,http://localhost:3000,http://localhost:5173
+      - OTEL_ENABLED=false
+    ports:
+      - "4001:4001"
+    networks:
+      - kjarvis-network
+    depends_on:
+      kauth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # === Orchestrator Frontend ===
+  orchestrator-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:4001
+    container_name: kjarvis-orchestrator-frontend
+    ports:
+      - "4000:80"
+    networks:
+      - kjarvis-network
+    depends_on:
+      - orchestrator-backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  kjarvis-network:
+    external: true
+

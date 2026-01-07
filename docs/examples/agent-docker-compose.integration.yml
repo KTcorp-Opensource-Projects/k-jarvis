@@ -1,0 +1,106 @@
+# =====================================================
+# Agent Team - Docker Compose (통합 환경 예시)
+# 
+# 이 파일은 Agent Team이 참고할 수 있는 예시입니다.
+# 실제 Agent 프로젝트에 맞게 수정하여 사용하세요.
+#
+# 전제조건:
+#   1. MCPHub의 docker-compose.integration.yml이 먼저 실행 중
+#   2. mcphub_kjarvis-network 네트워크가 존재해야 함
+# =====================================================
+
+version: '3.8'
+
+services:
+  # === Sample AI Agent ===
+  sample-agent:
+    build:
+      context: ./Sample-AI-Agent
+      dockerfile: Dockerfile
+    container_name: kjarvis-sample-agent
+    environment:
+      - PORT=5020
+      - MCPHUB_URL=http://kjarvis-mcphub-backend:3000
+      - REDIS_URL=redis://kjarvis-redis:6379/3
+      - LOG_LEVEL=info
+    ports:
+      - "5020:5020"
+    networks:
+      - mcphub_kjarvis-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5020/.well-known/agent.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # === Confluence Agent ===
+  confluence-agent:
+    build:
+      context: ./Confluence-Agent
+      dockerfile: Dockerfile
+    container_name: kjarvis-confluence-agent
+    environment:
+      - PORT=5010
+      - MCPHUB_URL=http://kjarvis-mcphub-backend:3000
+      - REDIS_URL=redis://kjarvis-redis:6379/4
+      - LOG_LEVEL=info
+    ports:
+      - "5010:5010"
+    networks:
+      - mcphub_kjarvis-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5010/.well-known/agent.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # === Jira Agent ===
+  jira-agent:
+    build:
+      context: ./Jira-Agent
+      dockerfile: Dockerfile
+    container_name: kjarvis-jira-agent
+    environment:
+      - PORT=5011
+      - MCPHUB_URL=http://kjarvis-mcphub-backend:3000
+      - REDIS_URL=redis://kjarvis-redis:6379/5
+      - LOG_LEVEL=info
+    ports:
+      - "5011:5011"
+    networks:
+      - mcphub_kjarvis-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5011/.well-known/agent.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # === GitHub Agent ===
+  github-agent:
+    build:
+      context: ./GitHub-Agent
+      dockerfile: Dockerfile
+    container_name: kjarvis-github-agent
+    environment:
+      - PORT=5012
+      - MCPHUB_URL=http://kjarvis-mcphub-backend:3000
+      - REDIS_URL=redis://kjarvis-redis:6379/6
+      - LOG_LEVEL=info
+    ports:
+      - "5012:5012"
+    networks:
+      - mcphub_kjarvis-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5012/.well-known/agent.json"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  mcphub_kjarvis-network:
+    external: true
+

@@ -1,0 +1,191 @@
+# =============================================================================
+# K-Jarvis - AI Agent Orchestration Platform
+# Open Source Edition - Docker Compose
+# =============================================================================
+# 
+# Quick Start:
+#   1. Copy .env.example to .env and configure
+#   2. docker-compose up -d
+#   3. Open http://localhost:4000
+#
+# Services:
+#   - postgres     : Database (PostgreSQL 15)
+#   - redis        : Cache (Redis 7)
+#   - backend      : K-Jarvis Orchestrator API (FastAPI)
+#   - frontend     : K-Jarvis Web UI (React)
+#   - agent-catalog: Agent Card Service (FastAPI)
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Infrastructure
+  # ==========================================================================
+  
+  postgres:
+    image: postgres:15
+    container_name: kjarvis-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-kjarvis}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: kjarvis-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # K-Jarvis Backend (Orchestrator)
+  # ==========================================================================
+  
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kjarvis-backend
+    environment:
+      # Database
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-kjarvis}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      
+      # LLM Provider (openai, azure, claude, gemini)
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      
+      # JWT
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-secret-key-in-production}
+      
+      # CORS
+      - CORS_ORIGINS=http://localhost:4000,http://localhost:3000
+      
+      # Server
+      - HOST=0.0.0.0
+      - PORT=4001
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # K-Jarvis Frontend
+  # ==========================================================================
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:4001
+    container_name: kjarvis-frontend
+    ports:
+      - "4000:80"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Agent Catalog Service
+  # ==========================================================================
+  
+  agent-catalog:
+    build:
+      context: ./agent-catalog
+      dockerfile: Dockerfile
+    container_name: kjarvis-agent-catalog
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/agent_catalog
+      - REDIS_URL=redis://redis:6379/1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+# =============================================================================
+# Volumes
+# =============================================================================
+
+volumes:
+  postgres_data:
+    name: kjarvis_postgres_data
+  redis_data:
+    name: kjarvis_redis_data
+
+# =============================================================================
+# Networks (optional, all services use default bridge network)
+# =============================================================================
+# To connect with external services (K-Auth, K-ARC, Agents), 
+# create an external network:
+#
+# docker network create kjarvis-network
+#
+# Then add to services:
+# networks:
+#   - kjarvis-network
+#
+# networks:
+#   kjarvis-network:
+#     external: true

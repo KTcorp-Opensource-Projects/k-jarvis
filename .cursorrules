@@ -1,0 +1,313 @@
+# K-Jarvis Orchestrator - Cursor Rules & Development Guidelines
+# Version: 1.0.0
+# Last Updated: 2024-12-03
+
+## 프로젝트 개요
+
+K-Jarvis는 A2A(Agent-to-Agent) 프로토콜 기반의 AI 에이전트 오케스트레이터입니다.
+LangGraph 기반으로 구축되었으며, 다중 에이전트 라우팅 및 체이닝을 지원합니다.
+
+---
+
+## 아키텍처 핵심 정보
+
+### 기술 스택
+- **Backend**: FastAPI + LangGraph + PostgreSQL
+- **Frontend**: React + Zustand + styled-components
+- **Database**: PostgreSQL with pgvector
+- **LLM Provider**: OpenAI / Azure OpenAI (dual support)
+- **Protocol**: A2A (Agent-to-Agent) Protocol
+
+### 핵심 모듈 위치
+- `backend/app/orchestrator.py` - 메인 오케스트레이터 로직
+- `backend/app/hybrid_router.py` - RAG 기반 에이전트 라우팅
+- `backend/app/llm_client.py` - LLM 클라이언트 (OpenAI/Azure)
+- `backend/app/conversation_service.py` - 대화 관리 서비스
+- `backend/app/agent_vector_store.py` - 에이전트 벡터 스토어
+- `frontend/src/store.js` - 프론트엔드 상태 관리
+
+### 포트 정보 (중요!)
+- **K-Jarvis Frontend**: 4000 (MCPHub 3000과 충돌 방지)
+- **K-Jarvis Backend**: 4001
+- **Confluence Agent**: 5010
+- **Jira Agent**: 5011
+- **GitHub Agent**: 5012
+
+### 중요한 환경변수 (.env)
+```
+# LLM Provider (openai 또는 azure)
+LLM_PROVIDER=openai
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Azure OpenAI
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=...
+AZURE_OPENAI_DEPLOYMENT_NAME=...
+AZURE_OPENAI_API_VERSION=2024-12-01-preview
+
+# Database
+DATABASE_URL=postgresql://...
+```
+
+---
+
+## 🚫 하지 말아야 할 것들 (DON'T)
+
+### 1. 코드 작성 시
+- ❌ 하드코딩된 URL/API 키/비밀번호 절대 금지
+- ❌ `print()` 대신 `logger` 사용 (logging 모듈)
+- ❌ 에러 발생 시 `pass`로 무시하지 말 것 (최소한 로깅)
+- ❌ 한 파일에 500줄 이상 작성 금지 (모듈 분리)
+- ❌ 테스트 없이 main 브랜치 머지 금지
+- ❌ 한국어/영어 혼용 금지 (UI는 영어, 주석은 한국어)
+
+### 2. API 작성 시
+- ❌ 인증 없는 엔드포인트 절대 금지 (public API 제외)
+- ❌ SQL 직접 문자열 연결 금지 (SQLAlchemy ORM 사용)
+- ❌ 에러 응답에 내부 스택트레이스 노출 금지
+
+### 3. 프론트엔드 작성 시
+- ❌ inline style 사용 금지 (styled-components 사용)
+- ❌ API 호출 시 인증 헤더 누락 금지
+- ❌ 사용자 권한 체크 없이 관리자 기능 노출 금지
+
+### 4. Git 작업 시
+- ❌ .env 파일 커밋 금지
+- ❌ node_modules, venv, __pycache__ 커밋 금지
+- ❌ 대용량 바이너리 파일 커밋 금지
+
+---
+
+## ✅ 해야 할 것들 (DO)
+
+### 1. 새 모듈 개발 시 체크리스트
+```
+□ 1. 설계 문서 작성 (docs/ 폴더)
+□ 2. 환경변수 추가 시 .env.example 업데이트
+□ 3. 단위 테스트 작성 (backend/tests/)
+□ 4. API 문서화 (FastAPI 자동 문서)
+□ 5. 에러 핸들링 및 로깅 추가
+□ 6. 프론트엔드 연동 테스트
+□ 7. 브라우저 통합 테스트
+```
+
+### 2. 테스트 전략
+
+#### 단계별 테스트 흐름
+```
+1. Unit Test (pytest)
+   └── backend/tests/test_*.py
+
+2. API Test (httpx/pytest)
+   └── 개별 엔드포인트 테스트
+
+3. Integration Test
+   └── Orchestrator + Agent 연동 테스트
+
+4. Browser Test (Cursor Browser Tools)
+   └── E2E 시나리오 테스트
+```
+
+#### 테스트 명령어
+```bash
+# Backend 테스트
+cd backend
+pytest tests/ -v
+
+# Frontend 빌드 체크
+cd frontend
+npm run build
+
+# 통합 테스트
+python -m pytest tests/enterprise_test.py -v
+```
+
+### 3. 코드 스타일
+- Python: Black + isort + flake8
+- JavaScript: ESLint + Prettier
+- SQL: 대문자 키워드, snake_case 컬럼명
+
+---
+
+## 📋 모듈 개발 템플릿
+
+### Backend 새 서비스 추가 시
+```python
+# backend/app/new_service.py
+import logging
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+
+class NewService:
+    """서비스 설명"""
+    
+    async def method_name(
+        self, 
+        db: AsyncSession, 
+        param: str
+    ) -> Optional[dict]:
+        """
+        메서드 설명
+        
+        Args:
+            db: 데이터베이스 세션
+            param: 파라미터 설명
+            
+        Returns:
+            결과 딕셔너리 또는 None
+        """
+        try:
+            # 구현
+            result = await self._process(param)
+            logger.info(f"Successfully processed: {param}")
+            return result
+        except Exception as e:
+            logger.error(f"Failed to process: {e}")
+            raise
+```
+
+### Frontend 새 컴포넌트 추가 시
+```javascript
+// frontend/src/components/NewComponent.js
+import React from 'react';
+import styled from 'styled-components';
+import { useStore } from '../store';
+
+const Container = styled.div`
+  /* K-Jarvis 테마 변수 사용 */
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+`;
+
+const NewComponent = () => {
+  const { someState } = useStore();
+  
+  return (
+    <Container>
+      {/* 구현 */}
+    </Container>
+  );
+};
+
+export default NewComponent;
+```
+
+---
+
+## 🔍 에이전트 팀 협업 규칙
+
+### A2A 프로토콜 커스터마이제이션 시
+1. `docs/A2A_PROTOCOL_COMPLIANCE_ANALYSIS.md` 업데이트
+2. 에이전트 팀에 문서 전달
+3. 양측 통합 테스트 수행
+
+### 에이전트 등록 정보 (agent.json) 필수 필드
+```json
+{
+  "name": "에이전트 이름",
+  "description": "에이전트 설명",
+  "url": "http://agent-url:port",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "routing": {
+    "keywords": ["키워드1", "키워드2"],
+    "domains": ["domain1"],
+    "description": "라우팅용 상세 설명"
+  }
+}
+```
+
+---
+
+## 🗂️ 기억 저장소 (Context Memory)
+
+### 프로젝트 핵심 결정사항
+
+1. **LLM Provider 이중화** (2024-12-03)
+   - OpenAI와 Azure OpenAI 모두 지원
+   - 환경변수 `LLM_PROVIDER`로 선택
+
+2. **RAG 기반 라우팅** (2024-12-02)
+   - pgvector 사용 (ChromaDB에서 마이그레이션)
+   - HybridRouter: 키워드 → RAG → LLM 폴백
+
+3. **사용자 분리** (2024-12-03)
+   - 대화 이력: user_id 기반 분리
+   - 에이전트 설정: user_agent_preferences 테이블
+
+4. **UI 테마** (2024-12-03)
+   - K-Jarvis 브랜딩 (J.A.R.V.I.S 스타일 HUD)
+   - 색상: Cyan/Teal (--accent-primary: #00d4ff)
+   - 폰트: Orbitron (로고), IBM Plex Sans (본문)
+
+### 알려진 이슈 및 해결책
+
+| 이슈 | 해결책 | 상태 |
+|-----|-------|-----|
+| 에이전트 응답 지연 | 프로그레스 바 표시 | ✅ 해결 |
+| 대화 분리 미작동 | 인증 헤더 추가 | ✅ 해결 |
+| Azure API 버전 | 2024-12-01-preview 사용 | ✅ 해결 |
+
+---
+
+## 🔧 트러블슈팅 가이드
+
+### 에이전트 연결 안될 때
+```bash
+# 1. 에이전트 서버 상태 확인
+curl http://localhost:8001/.well-known/agent.json
+
+# 2. 오케스트레이터 에이전트 목록 확인
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/agents
+
+# 3. 로그 확인
+tail -f backend/logs/orchestrator.log
+```
+
+### 프론트엔드 스타일 깨질 때
+```bash
+# CSS 변수 확인
+# frontend/src/index.css의 :root 섹션 확인
+# styled-components에서 var(--변수명) 사용 여부 확인
+```
+
+### DB 연결 오류
+```bash
+# PostgreSQL 상태 확인
+psql -h localhost -U $USER -d agent_orchestrator -c "SELECT 1"
+
+# 테이블 존재 확인
+psql -c "\dt" agent_orchestrator
+```
+
+---
+
+## 📝 대화 시 항상 고려할 사항
+
+1. **현재 브랜치 확인** 후 작업
+2. **테스트 우선** - 변경 후 반드시 테스트
+3. **증분 개발** - 작은 단위로 커밋
+4. **문서화** - 중요 결정은 docs/ 에 기록
+5. **일관성** - 기존 코드 스타일 따르기
+
+---
+
+## 📞 연락 정보
+
+- **Orchestrator Team**: K-Jarvis 개발팀
+- **Agent Team**: Confluence/Jira/GitHub AI Agent 개발팀
+- **Confluence Space**: CNCORE
+
+---
+
+# 이 파일은 Cursor AI가 프로젝트 컨텍스트를 이해하는 데 사용됩니다.
+# 주요 변경사항이 있을 때마다 업데이트해주세요.
+

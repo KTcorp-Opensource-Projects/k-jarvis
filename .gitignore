@@ -1,0 +1,120 @@
+# =====================================================
+# Environment & Secrets
+# =====================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# =====================================================
+# Python
+# =====================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+
+# =====================================================
+# Node.js / React
+# =====================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+frontend/build/
+frontend/dist/
+
+# =====================================================
+# IDEs & Editors
+# =====================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =====================================================
+# Logs & Debug
+# =====================================================
+*.log
+logs/
+debug/
+
+# =====================================================
+# Database
+# =====================================================
+*.db
+*.sqlite3
+
+# =====================================================
+# Temporary Files
+# =====================================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+
+# =====================================================
+# OS Generated
+# =====================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =====================================================
+# Testing & Coverage
+# =====================================================
+coverage/
+.nyc_output/
+*.lcov
+
+
+
+
+
+

@@ -1,0 +1,314 @@
+:root {
+  /* J.A.R.V.I.S Dark Theme - Holographic HUD Style */
+  --bg-primary: #020810;
+  --bg-secondary: #051020;
+  --bg-tertiary: #0a1828;
+  --bg-elevated: #102030;
+  --bg-hover: #153040;
+  
+  /* Accent Colors - Cyan/Teal Holographic */
+  --accent-primary: #00d4ff;
+  --accent-secondary: #00fff7;
+  --accent-tertiary: #00b8d4;
+  --accent-glow: rgba(0, 212, 255, 0.4);
+  --accent-dim: rgba(0, 212, 255, 0.15);
+  
+  /* Secondary Accent - Orange/Amber for warnings */
+  --accent-warm: #ff9500;
+  --accent-warm-glow: rgba(255, 149, 0, 0.3);
+  
+  /* Text Colors */
+  --text-primary: #e0f7ff;
+  --text-secondary: #80d4e8;
+  --text-tertiary: #4a9eb8;
+  --text-muted: #2d6880;
+  
+  /* Status Colors */
+  --success: #00ff88;
+  --warning: #ffb300;
+  --error: #ff3d3d;
+  --info: #00d4ff;
+  
+  /* Borders - Glowing edges */
+  --border-primary: rgba(0, 212, 255, 0.2);
+  --border-secondary: rgba(0, 212, 255, 0.3);
+  --border-accent: rgba(0, 212, 255, 0.6);
+  --border-glow: 0 0 10px rgba(0, 212, 255, 0.5);
+  
+  /* Gradients - Holographic */
+  --gradient-primary: linear-gradient(135deg, #00d4ff 0%, #00fff7 50%, #00b8d4 100%);
+  --gradient-bg: radial-gradient(ellipse at center, #051525 0%, #020810 70%);
+  --gradient-card: linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(0, 184, 212, 0.04) 100%);
+  --gradient-hud: linear-gradient(180deg, rgba(0, 212, 255, 0.1) 0%, transparent 100%);
+  
+  /* 3D Effects */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 30px rgba(0, 212, 255, 0.3);
+  --shadow-glow-intense: 0 0 60px rgba(0, 212, 255, 0.5);
+  
+  /* Typography */
+  --font-sans: 'Orbitron', 'Rajdhani', 'Share Tech Mono', -apple-system, sans-serif;
+  --font-mono: 'Share Tech Mono', 'JetBrains Mono', monospace;
+  --font-display: 'Orbitron', 'Audiowide', sans-serif;
+  
+  /* Spacing */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Holographic background effect */
+  background-image: 
+    radial-gradient(ellipse at 20% 30%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(0, 255, 247, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(0, 184, 212, 0.03) 0%, transparent 70%),
+    var(--gradient-bg);
+}
+
+#root {
+  height: 100%;
+}
+
+/* Scrollbar Styles - Holographic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 212, 255, 0.05);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--accent-primary), var(--accent-tertiary));
+  border-radius: 3px;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-secondary);
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
+  box-shadow: var(--border-glow);
+}
+
+/* Code blocks */
+code {
+  font-family: var(--font-mono);
+  background: rgba(0, 212, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85em;
+  color: var(--accent-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+pre {
+  font-family: var(--font-mono);
+  background: rgba(0, 20, 40, 0.8);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  border: 1px solid var(--border-primary);
+  box-shadow: inset 0 0 30px rgba(0, 212, 255, 0.05);
+}
+
+/* Links */
+a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+a:hover {
+  color: var(--accent-secondary);
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+
+/* ============================================
+   J.A.R.V.I.S Animations
+   ============================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes glow {
+  0%, 100% { 
+    box-shadow: 0 0 5px var(--accent-glow), 0 0 10px var(--accent-glow);
+  }
+  50% { 
+    box-shadow: 0 0 20px var(--accent-glow), 0 0 40px var(--accent-glow);
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes hologramFlicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  97% { opacity: 0.9; }
+  98% { opacity: 1; }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dataStream {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+@keyframes borderGlow {
+  0%, 100% { 
+    border-color: rgba(0, 212, 255, 0.3);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+  }
+  50% { 
+    border-color: rgba(0, 212, 255, 0.6);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) ease forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition-normal) ease forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.animate-hologram {
+  animation: hologramFlicker 4s ease-in-out infinite;
+}
+
+/* ============================================
+   HUD Elements
+   ============================================ */
+
+/* Corner brackets for HUD panels */
+.hud-panel {
+  position: relative;
+  background: rgba(0, 20, 40, 0.6);
+  border: 1px solid var(--border-primary);
+  backdrop-filter: blur(10px);
+}
+
+.hud-panel::before,
+.hud-panel::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent-primary);
+}
+
+.hud-panel::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.hud-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+}
+
+/* Grid overlay effect */
+.grid-overlay {
+  background-image: 
+    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Scanline effect */
+.scanline-effect::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+  opacity: 0.3;
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+}
