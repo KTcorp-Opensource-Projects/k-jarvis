@@ -95,7 +95,7 @@ class AuthService:
                 # Update last_login
                 await db.execute(
                     text("UPDATE users SET last_login = :now WHERE id = :id"),
-                    {"now": datetime.now(timezone.utc), "id": row.id}
+                    {"now": datetime.utcnow(), "id": row.id}
                 )
                 await db.commit()
                 
@@ -108,7 +108,7 @@ class AuthService:
                     role_name=row.role_name,
                     is_active=row.is_active,
                     created_at=row.created_at,
-                    last_login=datetime.now(timezone.utc)
+                    last_login=datetime.utcnow()
                 )
                 
         except Exception as e:
@@ -191,7 +191,7 @@ class AuthService:
             settings = get_settings()
             from datetime import timedelta
             
-            expires_at = datetime.now(timezone.utc) + timedelta(
+            expires_at = datetime.utcnow() + timedelta(
                 days=settings.jwt_refresh_token_expire_days
             )
             

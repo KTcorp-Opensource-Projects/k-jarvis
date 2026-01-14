@@ -1,10 +1,9 @@
 # =====================================================
 # K-Jarvis - Backend Dockerfile
 # KT AI 에이전트 플랫폼
-# Platform: linux/amd64 (for Azure deployment)
-# OpenTelemetry: Programmatic instrumentation
+# Platform: auto-detected
 # =====================================================
-FROM --platform=linux/amd64 python:3.11-slim
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app

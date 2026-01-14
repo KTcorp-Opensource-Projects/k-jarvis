@@ -4,12 +4,16 @@
 -- =====================================================
 
 -- Create K-Auth database
-CREATE DATABASE k_auth;
+CREATE DATABASE kauth;
 
 -- Create Orchestrator database
-CREATE DATABASE orchestrator;
+CREATE DATABASE kjarvis;
+
+-- Create Agent Catalog database
+CREATE DATABASE agent_catalog;
 
 -- Grant permissions
-GRANT ALL PRIVILEGES ON DATABASE k_auth TO postgres;
-GRANT ALL PRIVILEGES ON DATABASE orchestrator TO postgres;
+GRANT ALL PRIVILEGES ON DATABASE kauth TO postgres;
+GRANT ALL PRIVILEGES ON DATABASE kjarvis TO postgres;
+GRANT ALL PRIVILEGES ON DATABASE agent_catalog TO postgres;
 

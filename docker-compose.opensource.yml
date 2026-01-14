@@ -1,7 +1,7 @@
 # =============================================================================
 # K-Jarvis - Open Source Edition
 # =============================================================================
-# 
+#
 # 🚀 Quick Start:
 #   1. cp .env.example .env
 #   2. 필요한 API 키 설정 (.env 파일)
@@ -9,11 +9,11 @@
 #   4. http://localhost:4000 접속
 #
 # 📦 Services:
-#   - postgres      : PostgreSQL 15 (DB)
-#   - redis         : Redis 7 (Cache)
+#   - postgres      : Shared mcphub-postgres-local (via kjarvis-network)
+#   - redis         : Shared mcphub-redis-local (via kjarvis-network)
 #   - backend       : K-Jarvis Orchestrator API
 #   - frontend      : K-Jarvis Web UI
-#   - agent-catalog : Agent Card Service
+
 #
 # =============================================================================
 
@@ -23,111 +23,175 @@ services:
   # ===========================================================================
   # Infrastructure
   # ===========================================================================
-  
-  postgres:
-    image: postgres:15
-    container_name: kjarvis-postgres
-    environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-kjarvis}
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: kjarvis-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+  # ===========================================================================
+  # Infrastructure (Managed externally by K-Arc / Shared Network)
+  # ===========================================================================
+
+  # postgres: ... (Removed in favor of mcphub-postgres-local)
+  # redis: ... (Removed in favor of mcphub-redis-local)
 
   # ===========================================================================
   # K-Jarvis Backend (Orchestrator)
   # ===========================================================================
-  
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: kjarvis-backend
     environment:
-      # Database
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-kjarvis}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      
-      # Redis
-      - REDIS_URL=redis://redis:6379/0
-      
+      # Database (Shared mcphub-postgres-local)
+      - DATABASE_URL=postgresql+asyncpg://${DB_USER:-mcphub}:${DB_PASSWORD:-mcphub123}@mcphub-postgres-local:5432/kjarvis
+
+      # Redis (Shared mcphub-redis-local)
+      - REDIS_URL=redis://mcphub-redis-local:6379/0
+
       # LLM Provider (openai, azure, claude, gemini)
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.1}
-      
+
       # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
-      
+
       # Azure OpenAI
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
-      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-}
+      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
       - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
-      
+
       # Claude
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
-      
+
       # Gemini
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
-      
+
       # JWT
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-in-production-use-openssl-rand-hex-32}
-      
+
       # CORS
       - CORS_ORIGINS=http://localhost:4000,http://localhost:3000
-      
+
+      # Server
+      - HOST=0.0.0.0
       # Server
       - HOST=0.0.0.0
       - PORT=4001
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Admin Credentials (Injected from .env)
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+
+      # K-Auth Configuration
+      - KAUTH_URL=http://k-auth:4002
+      - KAUTH_PUBLIC_URL=http://localhost:4003
+      # Auto-injected credentials from .env
+      - KAUTH_CLIENT_ID=${KJARVIS_CLIENT_ID}
+      - KAUTH_CLIENT_SECRET=${KJARVIS_CLIENT_SECRET}
+      - KAUTH_CALLBACK_URL=http://localhost:4001/auth/kauth/callback
     ports:
       - "4001:4001"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+    #   redis:
+    #     condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:4001/health" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - k-jarvis-opensource
+
+  # ===========================================================================
+  # K-Auth Service
+  # ===========================================================================
+
+  k-auth:
+    build:
+      context: ../k-auth-opensource/backend
+      dockerfile: Dockerfile
+    container_name: k-auth
+    environment:
+      - DB_USER=${DB_USER:-mcphub}
+      - DB_HOST=mcphub-postgres-local
+      - DB_PORT=5432
+      - DB_PASSWORD=${DB_PASSWORD:-mcphub123}
+      - REDIS_URL=redis://mcphub-redis-local:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CORS_ORIGINS=http://localhost:4000,http://localhost:3000,http://localhost:5173
+      - HOST=0.0.0.0
+      - PORT=4002
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      # Auto-Provisioning Keys (Injected into main.py)
+      - KJARVIS_CLIENT_ID=${KJARVIS_CLIENT_ID}
+      - KJARVIS_CLIENT_SECRET=${KJARVIS_CLIENT_SECRET}
+      - KARC_CLIENT_ID=${KARC_CLIENT_ID}
+      - KARC_CLIENT_SECRET=${KARC_CLIENT_SECRET}
+      # RSA Configuration (Phase 2 Identity Propagation)
+      - JWT_ALGORITHM=RS256
+      - RSA_PRIVATE_KEY_PEM=| -----BEGIN PRIVATE KEY----- ... (truncated) ...
+      - RSA_PUBLIC_KEY_PEM=| -----BEGIN PUBLIC KEY----- ... (truncated) ...
+    ports:
+      - "4003:4002"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4002/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - k-jarvis-opensource
+
+  # ===========================================================================
+  # Mock Agents (Phase 2 Ecosystem)
+  # ===========================================================================
+
+  personal-agent:
+    build:
+      context: ..
+      dockerfile: k-jarvis-opensource/mock-agents/personal-agent/Dockerfile
+    container_name: kjarvis-agent-personal
+    environment:
+      - MCP_HUB_URL=http://k-arc-backend:3000/mcp
+      - MCP_HUB_TOKEN=mock-token
+      - LOG_LEVEL=INFO
+    ports:
+      - "8081:8081"
+    networks:
+      - k-jarvis-opensource
+    restart: unless-stopped
+
+  github-agent:
+    build:
+      context: ..
+      dockerfile: k-jarvis-opensource/mock-agents/github-agent/Dockerfile
+    container_name: kjarvis-agent-github
+    environment:
+      - MCP_HUB_URL=http://k-arc-backend:3000/mcp
+      - MCP_HUB_TOKEN=mock-token
+      - LOG_LEVEL=INFO
+    ports:
+      - "8082:8082"
+    networks:
+      - k-jarvis-opensource
+    restart: unless-stopped
 
   # ===========================================================================
   # K-Jarvis Frontend
   # ===========================================================================
-  
+
   frontend:
     build:
       context: ./frontend
@@ -140,47 +204,30 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:80" ]
       interval: 10s
       timeout: 5s
       retries: 3
     restart: unless-stopped
-
+    networks:
+      - k-jarvis-opensource
   # ===========================================================================
-  # Agent Catalog Service
+  # K-Arc (MCPHub) Services & MCP Servers
+  # [REMOVED] Moved to Shared Infrastructure (Layer 1) per RFC-005
+  # See: k-arc-opensource/docker-compose.local.yml
   # ===========================================================================
-  
-  agent-catalog:
-    build:
-      context: ./agent-catalog
-      dockerfile: Dockerfile
-    container_name: kjarvis-agent-catalog
-    environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/agent_catalog
-      - REDIS_URL=redis://redis:6379/1
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
 
-# =============================================================================
-# Volumes
-# =============================================================================
+  # =============================================================================
+  # Volumes
+  # =============================================================================
 
-volumes:
-  postgres_data:
-    name: kjarvis_opensource_postgres
-  redis_data:
-    name: kjarvis_opensource_redis
+  # volumes:
+  #   kjarvis_opensource_postgres:
+  #     name: kjarvis_opensource_postgres
+  #   kjarvis_opensource_redis:
+  #     name: kjarvis_opensource_redis
 
+networks:
+  k-jarvis-opensource:
+    name: kjarvis-network
+    external: true

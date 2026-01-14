@@ -45,8 +45,16 @@ async def send_message(
         user_id = str(current_user.id) if current_user else None
         # Option C: Pass kauth_user_id for MCPHub token lookup
         kauth_user_id = current_user.kauth_user_id if current_user else None
+        # Directive 007: Pass raw JWT token for Identity Propagation
+        jwt_token = current_user.access_token if current_user else None
+        
         logger.info(f"[API] user_id={user_id}, kauth_user_id={kauth_user_id}")  # DEBUG
-        response = await orchestrator.process_message(request, user_id, kauth_user_id)
+        response = await orchestrator.process_message(
+            request, 
+            user_id=user_id, 
+            kauth_user_id=kauth_user_id,
+            jwt_token=jwt_token
+        )
         return response
     except Exception as e:
         logger.error(f"Error processing message: {e}")
@@ -64,10 +72,17 @@ async def send_message_stream(
     user_id = str(current_user.id) if current_user else None
     # Option C: Pass kauth_user_id for MCPHub token lookup
     kauth_user_id = current_user.kauth_user_id if current_user else None
+    # Directive 007: Pass raw JWT token for Identity Propagation
+    jwt_token = current_user.access_token if current_user else None
     
     async def event_generator():
         try:
-            async for event in orchestrator.process_message_stream(request, user_id, kauth_user_id):
+            async for event in orchestrator.process_message_stream(
+                request, 
+                user_id=user_id, 
+                kauth_user_id=kauth_user_id,
+                jwt_token=jwt_token
+            ):
                 yield {
                     "event": event.event,
                     "data": json.dumps(event.data)

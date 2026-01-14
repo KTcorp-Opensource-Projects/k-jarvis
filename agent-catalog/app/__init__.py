@@ -1,2 +1,0 @@
-# Agent Catalog Service
-

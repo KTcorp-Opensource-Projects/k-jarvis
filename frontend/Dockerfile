@@ -1,11 +1,11 @@
 # =====================================================
 # Agent Orchestrator - Frontend Dockerfile
-# Platform: linux/amd64 (for Azure deployment)
+# Platform: auto-detected
 # Multi-stage build for smaller image
 # =====================================================
 
 # Stage 1: Build
-FROM --platform=linux/amd64 node:18-alpine AS builder
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ ENV REACT_APP_API_URL=$REACT_APP_API_URL
 RUN npm run build
 
 # Stage 2: Production
-FROM --platform=linux/amd64 nginx:alpine
+FROM nginx:alpine
 
 # Copy custom nginx config
 RUN rm /etc/nginx/conf.d/default.conf

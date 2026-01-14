@@ -15,6 +15,7 @@ from .auth.kauth import kauth_router
 from .auth.webhook import webhook_router
 from .registry import registry
 from .database import init_db, close_db
+from .orchestrator import GlobalHttpClient
 
 
 # Configure logging
@@ -43,6 +44,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database connection failed: {e}. Running without persistence.")
     
+    # Initialize Global HTTP Client (Connection Pooling)
+    await GlobalHttpClient.initialize()
+    
     await registry.start()
     logger.info("Agent Orchestrator started successfully")
     
@@ -51,6 +55,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Agent Orchestrator...")
     await registry.stop()
+    await GlobalHttpClient.close()
     await close_db()
     logger.info("Agent Orchestrator shutdown complete")
 

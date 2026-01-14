@@ -75,9 +75,14 @@ async def get_current_user(
     
     # Option C: Extract kauth_user_id from JWT for MCPHub token lookup
     kauth_user_id = payload.get("kauth_user_id")
+    # Directive 007: Inject raw token for A2A Identity Propagation
+    # This token will be passed to Orchestrator -> Gateway -> downstream MCP servers
+    user = user.model_copy(update={
+        "kauth_user_id": kauth_user_id,
+        "access_token": token 
+    })
+    
     if kauth_user_id:
-        # Use model_copy to create new instance with kauth_user_id
-        user = user.model_copy(update={"kauth_user_id": kauth_user_id})
         logger.debug(f"[Auth] Set kauth_user_id from JWT: {kauth_user_id[:8]}...")
     
     return user

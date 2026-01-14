@@ -9,11 +9,12 @@ from datetime import datetime
 from typing import AsyncGenerator, Optional, Dict, Any, List
 from loguru import logger
 import httpx
+from tenacity import AsyncRetrying, retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from .config import get_settings
 from .models import (
     ChatRequest, ChatResponse, ChatMessage, Conversation,
-    MessageRole, TaskState, StreamEvent
+    MessageRole, TaskState, StreamEvent, AgentRoutingInfo
 )
 from .registry import registry
 from .router import router  # Legacy router (fallback)
@@ -24,6 +25,43 @@ from .llm_client import get_llm_client
 from .mcp_token_service import get_mcp_token_service
 from .token_cache import get_token_cache
 from .database import get_db_session
+
+class GlobalHttpClient:
+    """
+    Global HTTP Client Singleton for Connection Pooling.
+    Initializes a shared httpx.AsyncClient to reuse TCP connections.
+    """
+    _client: Optional[httpx.AsyncClient] = None
+
+    @classmethod
+    def get_client(cls) -> httpx.AsyncClient:
+        if cls._client is None:
+            # Lazy initialization if not initialized via lifespan (safety net)
+            # Ideally initialized in main.py lifespan
+            cls._client = httpx.AsyncClient(
+                timeout=90.0,
+                verify=False,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+            )
+        return cls._client
+
+    @classmethod
+    async def initialize(cls):
+        if cls._client is None:
+            logger.info("[GlobalHttpClient] Initializing global HTTP client (Pool: 20/100)")
+            cls._client = httpx.AsyncClient(
+                timeout=90.0,
+                verify=False,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+            )
+
+    @classmethod
+    async def close(cls):
+        if cls._client:
+            logger.info("[GlobalHttpClient] Closing global HTTP client")
+            await cls._client.aclose()
+            cls._client = None
+
 
 
 class ConversationSummarizer:
@@ -226,7 +264,8 @@ class A2AOrchestrator:
         self, 
         request: ChatRequest,
         user_id: Optional[str] = None,
-        kauth_user_id: Optional[str] = None  # Option C: K-Auth user ID for MCPHub
+        kauth_user_id: Optional[str] = None,  # Option C: K-Auth user ID for MCPHub
+        jwt_token: Optional[str] = None  # Directive 007: Raw Token
     ) -> ChatResponse:
         """
         Process a user message:
@@ -339,7 +378,8 @@ class A2AOrchestrator:
                 conversation.id,  # contextId for multi-turn
                 reference_task_ids,
                 user_id,
-                kauth_user_id  # Option C: K-Auth user ID for MCPHub token lookup
+                kauth_user_id,  # Option C: K-Auth user ID for MCPHub token lookup
+                jwt_token  # Directive 007: Pass Raw Token
             )
             
             # Extract task_id from response (A2A Standard)
@@ -519,7 +559,8 @@ class A2AOrchestrator:
         self,
         request: ChatRequest,
         user_id: Optional[str] = None,
-        kauth_user_id: Optional[str] = None  # Option C: K-Auth user ID for MCPHub
+        kauth_user_id: Optional[str] = None,  # Option C: K-Auth user ID for MCPHub
+        jwt_token: Optional[str] = None  # Directive 007: Raw Token
     ) -> AsyncGenerator[StreamEvent, None]:
         """
         Process a user message with streaming response.
@@ -593,8 +634,10 @@ class A2AOrchestrator:
                 routing_decision.agent_url,
                 enriched_message,  # Now includes conversation history context
                 conversation.id,
+                conversation.id,
                 reference_task_ids,
-                user_id
+                user_id,
+                jwt_token=jwt_token  # Directive 007: Pass Raw Token
             ):
                 full_content += chunk
                 yield StreamEvent(
@@ -665,6 +708,8 @@ class A2AOrchestrator:
                 task_ids.append(msg.metadata["task_id"])
         return task_ids if task_ids else None
     
+
+    
     async def _send_to_agent(
         self,
         agent_url: str,
@@ -672,107 +717,97 @@ class A2AOrchestrator:
         context_id: str,
         reference_task_ids: list = None,
         user_id: Optional[str] = None,
-        kauth_user_id: Optional[str] = None  # Option C: K-Auth user ID for MCPHub
+        kauth_user_id: Optional[str] = None,
+        jwt_token: Optional[str] = None  # Directive 007: Raw Token
     ) -> Dict[str, Any]:
         """
-        Send message to agent using A2A protocol (Google A2A Standard Compliant).
+        Send message to agent using A2A protocol (Standard + Legacy) with Global Client & Retries.
         
-        A2A Standard (Google Specification):
-        - Method: SendMessage (PascalCase)
-        - contextId: Maintains conversation context
-        - referenceTaskIds: References previous tasks
-        - Response: result.message structure
-        
-        Phase 1: Dual Support (Standard + Legacy)
-        - First try A2A standard method (SendMessage)
-        - Fallback to legacy method (message/send) for backward compatibility
-        
-        Custom Extension (Option C Architecture):
-        - X-MCPHub-User-Id: K-Auth user ID for MCPHub token lookup
-        - X-Request-Id: 요청 추적용 고유 ID
-        - X-User-Id: Orchestrator 사용자 ID
+        Retry Policy:
+        - Retries performed on HTTP transport layer only.
+        - Message IDs and Request IDs are generated ONCE to ensure idempotency.
         """
         try:
-            # Generate request ID for distributed tracing
+            # Generate request ID (ONCE)
             request_id = str(uuid.uuid4())
             
             # Build headers
             headers = {
                 "Content-Type": "application/json",
-                "X-Request-Id": request_id  # 분산 트레이싱용 요청 ID
+                "X-Request-Id": request_id
             }
             
-            # Add User-Id header if available
             if user_id:
                 headers["X-User-Id"] = user_id
             
-            # Option C: Add K-Auth User ID for MCPHub token lookup
             if kauth_user_id:
+                # Directive 007: Use X-Mcp-User-Id (standardized)
+                headers["X-Mcp-User-Id"] = kauth_user_id
+                # Legacy Support (Temporary)
                 headers["X-MCPHub-User-Id"] = kauth_user_id
-                logger.info(f"[A2A] Added X-MCPHub-User-Id header: {kauth_user_id[:8]}...")
-            else:
-                logger.warning(f"[A2A] No kauth_user_id provided!")
+                logger.debug(f"[A2A] Added X-Mcp-User-Id header: {kauth_user_id[:8]}...")
+            
+            if jwt_token:
+                # Directive 007: Identity Propagation
+                headers["Authorization"] = f"Bearer {jwt_token}"
+                logger.debug(f"[A2A] Added Authorization header: Bearer {jwt_token[:10]}...")
             
             logger.debug(f"[A2A] Request ID: {request_id}")
             
-            async with httpx.AsyncClient(timeout=90.0, verify=False) as client:
-                # A2A Standard Part structure (Google Spec)
-                # Standard: { "text": "..." } - direct key
-                # Also support: { "kind": "text", "text": "..." } for compatibility
-                message_parts = [
-                    {
-                        "text": message  # A2A Standard: Direct text key
-                    }
-                ]
-                
-                # Build A2A standard message object
-                message_obj = {
-                    "role": "user",
-                    "parts": message_parts,
-                    "messageId": str(uuid.uuid4()),
-                    "contextId": context_id  # A2A Standard: Context for multi-turn
-                }
-                
-                # Add referenceTaskIds if available (A2A Standard)
-                if reference_task_ids:
-                    message_obj["referenceTaskIds"] = reference_task_ids
-                
-                # Phase 1: Try A2A Standard method first (SendMessage)
-                standard_payload = {
-                    "jsonrpc": "2.0",
-                    "id": str(uuid.uuid4()),
-                    "method": "SendMessage",  # A2A Standard: PascalCase
-                    "params": {
-                        "message": message_obj
-                    }
-                }
-                
-                # Try /tasks/send endpoint with standard method
-                response = await client.post(
-                    f"{agent_url}/tasks/send",
-                    json=standard_payload,
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    
-                    # Check for method not found error (fallback to legacy)
-                    if "error" in result and result.get("error", {}).get("code") == -32601:
-                        logger.info("[A2A] Standard method not supported, falling back to legacy method")
-                        return await self._send_to_agent_legacy(
-                            client, agent_url, message, context_id, 
-                            reference_task_ids, headers
-                        )
-                    
-                    return self._parse_a2a_response(result)
-                else:
-                    # Try legacy method as fallback
-                    logger.info(f"[A2A] Standard method failed (HTTP {response.status_code}), trying legacy")
+            # Use Global Client (Connection Pooling)
+            client = GlobalHttpClient.get_client()
+            
+            # Message Construction (ONCE)
+            message_parts = [{"text": message}]
+            message_obj = {
+                "role": "user",
+                "parts": message_parts,
+                "messageId": str(uuid.uuid4()),
+                "contextId": context_id
+            }
+            if reference_task_ids:
+                message_obj["referenceTaskIds"] = reference_task_ids
+            
+            # Standard Payload (PascalCase) (ONCE)
+            standard_payload = {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "SendMessage",
+                "params": {"message": message_obj}
+            }
+            
+            # Execute Request with Retry Logic (Idempotent)
+            response = None
+            async for attempt in AsyncRetrying(
+                retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, httpx.PoolTimeout)),
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1, min=1, max=4),
+                reraise=True
+            ):
+                with attempt:
+                    response = await client.post(
+                        f"{agent_url}/tasks/send",
+                        json=standard_payload,
+                        headers=headers
+                    )
+            
+            # Process Response
+            if response and response.status_code == 200:
+                result = response.json()
+                if "error" in result and result.get("error", {}).get("code") == -32601:
+                    logger.info("[A2A] Standard method not supported, falling back to legacy method")
+                    # Legacy fallback logic here (Note: Legacy fallback does NOT auto-retry internally yet)
                     return await self._send_to_agent_legacy(
-                        client, agent_url, message, context_id,
+                        client, agent_url, message, context_id, 
                         reference_task_ids, headers
                     )
+                return self._parse_a2a_response(result)
+            else:
+                logger.info(f"[A2A] Standard method failed (HTTP {response.status_code if response else 'None'}), trying legacy")
+                return await self._send_to_agent_legacy(
+                    client, agent_url, message, context_id,
+                    reference_task_ids, headers
+                )
                     
         except httpx.TimeoutException:
             logger.error(f"Timeout connecting to agent at {agent_url}")
@@ -780,7 +815,7 @@ class A2AOrchestrator:
         except Exception as e:
             logger.error(f"Error communicating with agent: {e}")
             return {"content": f"Error communicating with agent: {str(e)}", "state": "failed"}
-    
+
     async def _send_to_agent_legacy(
         self,
         client: httpx.AsyncClient,
@@ -883,7 +918,8 @@ class A2AOrchestrator:
         message: str,
         context_id: str,
         reference_task_ids: list = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        jwt_token: Optional[str] = None  # Directive 007: Raw Token
     ) -> AsyncGenerator[str, None]:
         """
         Stream response from agent using A2A protocol SSE (Standard Compliant).
@@ -918,40 +954,47 @@ class A2AOrchestrator:
                 if mcp_token:
                     headers["X-MCP-Hub-Token"] = mcp_token
             
+            # Directive 007: Identity Propagation
+            if jwt_token:
+                headers["Authorization"] = f"Bearer {jwt_token}"
+                logger.debug(f"[A2A Stream] Added Authorization header: Bearer {jwt_token[:10]}...")
+            
             logger.debug(f"[A2A Stream] Request ID: {request_id}")
             
-            async with httpx.AsyncClient(timeout=90.0, verify=False) as client:
-                # A2A Standard message object (Google Spec)
-                message_obj = {
-                    "role": "user",
-                    "parts": [{"text": message}],  # A2A Standard: Direct text key
-                    "messageId": str(uuid.uuid4()),
-                    "contextId": context_id
+            # Use Global Client (Connection Pooling)
+            client = GlobalHttpClient.get_client()
+            
+            # A2A Standard message object (Google Spec)
+            message_obj = {
+                "role": "user",
+                "parts": [{"text": message}],  # A2A Standard: Direct text key
+                "messageId": str(uuid.uuid4()),
+                "contextId": context_id
+            }
+            
+            # Add referenceTaskIds if available (A2A Standard)
+            if reference_task_ids:
+                message_obj["referenceTaskIds"] = reference_task_ids
+            
+            # A2A Standard: StreamMessage (PascalCase)
+            # Legacy fallback: message/stream
+            payload = {
+                "jsonrpc": "2.0",
+                "id": str(uuid.uuid4()),
+                "method": "StreamMessage",  # A2A Standard: PascalCase
+                "params": {
+                    "message": message_obj
                 }
-                
-                # Add referenceTaskIds if available (A2A Standard)
-                if reference_task_ids:
-                    message_obj["referenceTaskIds"] = reference_task_ids
-                
-                # A2A Standard: StreamMessage (PascalCase)
-                # Legacy fallback: message/stream
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": str(uuid.uuid4()),
-                    "method": "StreamMessage",  # A2A Standard: PascalCase
-                    "params": {
-                        "message": message_obj
-                    }
-                }
-                
-                # Use /tasks/send for streaming (some agents use this endpoint)
-                # method: "message/stream"으로 구분, Accept 헤더로 SSE 요청
-                async with client.stream(
-                    "POST",
-                    f"{agent_url}/tasks/send",
-                    json=payload,
-                    headers=headers
-                ) as response:
+            }
+            
+            # Use /tasks/send for streaming (some agents use this endpoint)
+            # method: "message/stream"으로 구분, Accept 헤더로 SSE 요청
+            async with client.stream(
+                "POST",
+                f"{agent_url}/tasks/send",
+                json=payload,
+                headers=headers
+            ) as response:
                     async for line in response.aiter_lines():
                         if line.startswith("data: "):
                             data = json.loads(line[6:])

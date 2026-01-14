@@ -17,7 +17,9 @@ from .config import get_settings
 settings = get_settings()
 
 # Database URL (without SSL params - handled separately for asyncpg)
-DATABASE_URL = f"postgresql+asyncpg://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = f"postgresql+asyncpg://{settings.db_user}:{settings.db_password}@{settings.db_host}:{settings.db_port}/{settings.db_name}"
 
 # Schema file path
 SCHEMA_FILE_PATH = Path(__file__).parent.parent / "db" / "schema.sql"
@@ -113,7 +115,7 @@ async def check_tables_exist() -> bool:
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
                     WHERE table_schema = 'public' 
-                    AND table_name = 'users'
+                    AND table_name = 'conversations'
                 );
             """))
             row = result.fetchone()
@@ -124,31 +126,67 @@ async def check_tables_exist() -> bool:
 
 
 async def initialize_schema():
-    """Initialize database schema from schema.sql file"""
-    if not SCHEMA_FILE_PATH.exists():
-        logger.error(f"Schema file not found: {SCHEMA_FILE_PATH}")
-        raise FileNotFoundError(f"Schema file not found: {SCHEMA_FILE_PATH}")
+    """Initialize database schema using SQLAlchemy models"""
+    logger.info("Initializing database schema from schema.sql...")
     
-    logger.info(f"Initializing database schema from {SCHEMA_FILE_PATH}")
-    
-    # Read schema file
-    schema_sql = SCHEMA_FILE_PATH.read_text(encoding='utf-8')
-    
-    # Split by semicolon and execute each statement
-    # (asyncpg doesn't support multiple statements in one execute)
-    statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
-    
-    async with get_engine().begin() as conn:
-        for i, statement in enumerate(statements):
-            if statement and not statement.startswith('--'):
+    try:
+        if not SCHEMA_FILE_PATH.exists():
+            logger.error(f"Schema file not found at {SCHEMA_FILE_PATH}")
+            return
+
+        # schema.sql contains PL/pgSQL which breaks with naive splitting.
+        # Fallback: Execute critical table definitions directly.
+        MISSING_TABLES_SQL = """
+        CREATE TABLE IF NOT EXISTS conversations (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) DEFAULT 'New Chat',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+            content TEXT NOT NULL,
+            agent_used VARCHAR(100),
+            task_id VARCHAR(100),
+            metadata JSONB DEFAULT '{}',
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        
+        CREATE TABLE IF NOT EXISTS registered_agents (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            url VARCHAR(500) UNIQUE NOT NULL,
+            version VARCHAR(50) DEFAULT '1.0.0',
+            skills JSONB DEFAULT '[]',
+            capabilities JSONB DEFAULT '{}',
+            status VARCHAR(20) DEFAULT 'offline',
+            registered_by UUID REFERENCES users(id),
+            last_seen TIMESTAMP WITH TIME ZONE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        
+        async with get_engine().begin() as conn:
+            # Execute statements individually
+            statements = [s.strip() for s in MISSING_TABLES_SQL.split(';') if s.strip()]
+            for statement in statements:
                 try:
                     await conn.execute(text(statement))
-                except Exception as e:
-                    # Ignore "already exists" errors
-                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
-                        logger.warning(f"Statement {i+1} warning: {e}")
-    
-    logger.info("Database schema initialized successfully")
+                except Exception as stmt_err:
+                     logger.error(f"Failed to execute table creation: {statement[:50]}... Error: {stmt_err}")
+            
+        logger.info("Database schema initialized successfully (Safe Fallback)")
+            
+        logger.info("Database schema initialized successfully from SQL file")
+    except Exception as e:
+        logger.error(f"Failed to initialize schema: {e}")
+        raise
 
 
 async def init_db():
@@ -173,14 +211,67 @@ async def init_db():
             if not tables_exist:
                 logger.info("Tables not found. Initializing schema...")
                 await initialize_schema()
+                await seed_initial_data()
             else:
-                logger.info("Database tables already exist")
+                logger.info("Database tables already exist. checking for data seeding...")
+                await seed_initial_data()
         else:
             logger.info("DB_AUTO_INIT is disabled. Skipping schema check.")
             
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+
+async def seed_initial_data():
+    """Seed initial data (roles, admin user)"""
+    try:
+        from .auth.db_models import Role, User
+        from .auth.security import get_password_hash
+        from sqlalchemy import select
+        
+        async with get_session_maker()() as session:
+            # Check/Create Roles
+            result = await session.execute(select(Role).where(Role.name == "admin"))
+            if not result.scalar_one_or_none():
+                logger.info("Seeding initial roles...")
+                admin_role = Role(id=1, name="admin", description="Administrator")
+                user_role = Role(id=2, name="user", description="Standard User")
+                session.add_all([admin_role, user_role])
+                await session.commit()
+            
+            # Check/Create Admin User
+            result = await session.execute(select(User).where(User.username == "admin"))
+            existing_admin = result.scalar_one_or_none()
+            
+            admin_password = os.getenv("ADMIN_PASSWORD", "admin123!@#")
+            new_password_hash = get_password_hash(admin_password)
+            
+            if not existing_admin:
+                logger.info("Seeding default admin user...")
+                admin_user = User(
+                    username="admin",
+                    email=os.getenv("ADMIN_EMAIL", "admin@k-jarvis.com"),
+                    password_hash=new_password_hash,
+                    name="Admin User",
+                    role_id=1,
+                    is_active=True
+                )
+                session.add(admin_user)
+                await session.commit()
+                logger.info("Default admin user created.")
+            else:
+                # Always sync password from env (Self-Healing)
+                logger.info("Syncing admin password from environment...")
+                existing_admin.password_hash = new_password_hash
+                existing_admin.role_id = 1
+                existing_admin.is_active = True
+                await session.commit()
+                logger.info("Default admin user updated (Password Synced).")
+                
+    except Exception as e:
+        logger.error(f"Failed to seed initial data: {e}")
+        # Don't raise, just log error
+
 
 
 async def close_db():

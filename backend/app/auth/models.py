@@ -47,6 +47,7 @@ class UserInDB(BaseModel):
     created_at: datetime
     last_login: Optional[datetime] = None
     kauth_user_id: Optional[str] = None  # Option C: K-Auth user ID for MCPHub
+    access_token: Optional[str] = None  # Directive 007: Raw token for A2A Identity Propagation
 
 
 class TokenResponse(BaseModel):

@@ -1,0 +1,7 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+requests>=2.31.0
+pytest>=7.4.0
+pytest-asyncio
+python-multipart>=0.0.6
+# k-jarvis-sdk is expected to be installed manually or via Docker volume

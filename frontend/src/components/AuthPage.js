@@ -9,9 +9,9 @@ const AuthPage = () => {
   const [name, setName] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [rotation, setRotation] = useState(0);
-  
+
   const { login, register, authLoading, authError, clearAuthError } = useStore();
-  
+
   // Logo rotation animation
   useEffect(() => {
     const interval = setInterval(() => {
@@ -19,11 +19,11 @@ const AuthPage = () => {
     }, 50);
     return () => clearInterval(interval);
   }, []);
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     clearAuthError();
-    
+
     if (isLogin) {
       const result = await login(username, password);
       if (result.success) {
@@ -40,7 +40,7 @@ const AuthPage = () => {
       }
     }
   };
-  
+
   const switchMode = () => {
     setIsLogin(!isLogin);
     clearAuthError();
@@ -51,12 +51,12 @@ const AuthPage = () => {
     <div style={styles.container}>
       {/* Animated background grid */}
       <div style={styles.gridOverlay} />
-      
+
       {/* Floating particles */}
       <div style={styles.particles}>
         {[...Array(20)].map((_, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             style={{
               ...styles.particle,
               left: `${Math.random() * 100}%`,
@@ -67,22 +67,22 @@ const AuthPage = () => {
           />
         ))}
       </div>
-      
+
       {/* Scanline effect */}
       <div style={styles.scanline} />
-      
+
       <div style={styles.card}>
         {/* HUD Corner brackets */}
-        <div style={{...styles.corner, ...styles.cornerTL}} />
-        <div style={{...styles.corner, ...styles.cornerTR}} />
-        <div style={{...styles.corner, ...styles.cornerBL}} />
-        <div style={{...styles.corner, ...styles.cornerBR}} />
-        
+        <div style={{ ...styles.corner, ...styles.cornerTL }} />
+        <div style={{ ...styles.corner, ...styles.cornerTR }} />
+        <div style={{ ...styles.corner, ...styles.cornerBL }} />
+        <div style={{ ...styles.corner, ...styles.cornerBR }} />
+
         {/* J.A.R.V.I.S Logo */}
         <div style={styles.logoSection}>
           <div style={styles.logoContainer}>
             {/* Outer rotating ring */}
-            <div style={{...styles.logoRing, ...styles.logoRingOuter, transform: `rotate(${rotation}deg)`}}>
+            <div style={{ ...styles.logoRing, ...styles.logoRingOuter, transform: `rotate(${rotation}deg)` }}>
               <svg viewBox="0 0 200 200" style={styles.logoSvg}>
                 <defs>
                   <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -95,14 +95,14 @@ const AuthPage = () => {
                 <circle cx="100" cy="100" r="85" fill="none" stroke="rgba(0,212,255,0.3)" strokeWidth="1" />
               </svg>
             </div>
-            
+
             {/* Middle ring - counter rotate */}
-            <div style={{...styles.logoRing, ...styles.logoRingMiddle, transform: `rotate(${-rotation * 1.5}deg)`}}>
+            <div style={{ ...styles.logoRing, ...styles.logoRingMiddle, transform: `rotate(${-rotation * 1.5}deg)` }}>
               <svg viewBox="0 0 160 160" style={styles.logoSvg}>
                 <circle cx="80" cy="80" r="75" fill="none" stroke="rgba(0,212,255,0.5)" strokeWidth="1" strokeDasharray="8 4" />
                 {/* Tech marks */}
                 {[0, 45, 90, 135, 180, 225, 270, 315].map((angle, i) => (
-                  <line 
+                  <line
                     key={i}
                     x1={80 + 60 * Math.cos(angle * Math.PI / 180)}
                     y1={80 + 60 * Math.sin(angle * Math.PI / 180)}
@@ -114,7 +114,7 @@ const AuthPage = () => {
                 ))}
               </svg>
             </div>
-            
+
             {/* Inner core */}
             <div style={styles.logoCore}>
               <div style={styles.logoCoreInner}>
@@ -122,7 +122,7 @@ const AuthPage = () => {
               </div>
             </div>
           </div>
-          
+
           <h1 style={styles.title}>K-JARVIS</h1>
           <p style={styles.subtitle}>KT AI AGENT PLATFORM</p>
           <div style={styles.statusBar}>
@@ -130,33 +130,33 @@ const AuthPage = () => {
             <span style={styles.statusText}>SYSTEM ONLINE</span>
           </div>
         </div>
-        
+
         {/* Success Message */}
         {showSuccess && (
           <div style={styles.successMessage}>
-            <span style={styles.messageIcon}>✓</span> 
+            <span style={styles.messageIcon}>✓</span>
             <span>REGISTRATION COMPLETE. PLEASE LOGIN.</span>
           </div>
         )}
-        
+
         {/* Error Message */}
         {authError && (
           <div style={styles.errorMessage}>
-            <span style={styles.messageIcon}>⚠</span> 
+            <span style={styles.messageIcon}>⚠</span>
             <span>{authError}</span>
           </div>
         )}
-        
+
         {/* Form */}
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.formHeader}>
             <div style={styles.formHeaderLine} />
             <h2 style={styles.formTitle}>
-              {isLogin ? 'AUTHENTICATION' : 'REGISTRATION'}
+              {isLogin ? 'ADMIN / LOCAL LOGIN' : 'REGISTRATION'}
             </h2>
             <div style={styles.formHeaderLine} />
           </div>
-          
+
           {!isLogin && (
             <>
               <div style={styles.inputGroup}>
@@ -171,7 +171,7 @@ const AuthPage = () => {
                   minLength={2}
                 />
               </div>
-              
+
               <div style={styles.inputGroup}>
                 <label style={styles.label}>USER ID</label>
                 <input
@@ -184,7 +184,7 @@ const AuthPage = () => {
                   minLength={3}
                 />
               </div>
-              
+
               <div style={styles.inputGroup}>
                 <label style={styles.label}>EMAIL</label>
                 <input
@@ -198,10 +198,10 @@ const AuthPage = () => {
               </div>
             </>
           )}
-          
+
           {isLogin && (
             <div style={styles.inputGroup}>
-              <label style={styles.label}>USER ID / EMAIL</label>
+              <label style={styles.label}>ADMIN / LOCAL ID</label>
               <input
                 type="text"
                 value={username}
@@ -213,7 +213,7 @@ const AuthPage = () => {
               />
             </div>
           )}
-          
+
           <div style={styles.inputGroup}>
             <label style={styles.label}>PASSWORD</label>
             <input
@@ -223,13 +223,13 @@ const AuthPage = () => {
               placeholder="••••••••"
               style={styles.input}
               required
-              minLength={6}
+              minLength={1}
               autoComplete="new-password"
             />
           </div>
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             style={{
               ...styles.submitButton,
               ...(authLoading && styles.submitButtonDisabled)
@@ -241,20 +241,20 @@ const AuthPage = () => {
             ) : (
               <>
                 <span style={styles.buttonIcon}>{isLogin ? '▶' : '+'}</span>
-                <span>{isLogin ? 'INITIATE LOGIN' : 'CREATE ACCOUNT'}</span>
+                <span>{isLogin ? 'LOCAL LOGIN' : 'CREATE ACCOUNT'}</span>
               </>
             )}
           </button>
-          
+
           {isLogin && (
             <>
               <div style={styles.divider}>
                 <span style={styles.dividerLine} />
-                <span style={styles.dividerText}>OR</span>
+                <span style={styles.dividerText}>OR LOGIN WITH</span>
                 <span style={styles.dividerLine} />
               </div>
-              
-              <button 
+
+              <button
                 type="button"
                 onClick={() => window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:4001'}/auth/kauth`}
                 style={styles.kauthButton}
@@ -265,7 +265,7 @@ const AuthPage = () => {
             </>
           )}
         </form>
-        
+
         {/* Switch Mode */}
         <div style={styles.switchSection}>
           <span style={styles.switchText}>
@@ -276,7 +276,7 @@ const AuthPage = () => {
           </button>
         </div>
       </div>
-      
+
       {/* Version info */}
       <div style={styles.versionInfo}>
         <span>K-JARVIS v2.0.0</span>
